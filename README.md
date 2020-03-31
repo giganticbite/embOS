@@ -1,7 +1,7 @@
 # embOS
 
 ## 実行方法  
-``!cons_(nt/9x).bat``で以下を実行(ntか9xのどちらか)
+``src/!cons_(nt/9x).bat``で以下を実行(ntか9xのどちらか)
 ```
 make run_full
 ```
