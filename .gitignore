@@ -1,1 +1,7 @@
 /.vs
+/src/*/*.lst
+/src/*/*.obj
+/src/*/*.map
+/src/*/*.bim
+/src/*/*.org
+/src/*/*.img
