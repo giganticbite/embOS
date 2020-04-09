@@ -52,8 +52,8 @@ void console_task(struct SHEET* sheet, int memtotal)
 		else {
 			i = fifo32_get(&task->fifo);
 			io_sti();
-			if (i <= 1 && cons.sht != 0) { /* カーソル用タイマ */
-				if (i != 0) {
+			if (i <= 1 && cons.sht) { /* カーソル用タイマ */
+				if (i) {
 					timer_init(cons.timer, &task->fifo, 0); /* 次は0を */
 					if (cons.cur_c >= 0) {
 						cons.cur_c = COL8_FFFFFF;
@@ -95,7 +95,7 @@ void console_task(struct SHEET* sheet, int memtotal)
 					cons_putchar(&cons, ' ', 0);
 					cmdline[cons.cur_x / 8 - 2] = 0;
 					cons_newline(&cons);
-					cons_runcmd(cmdline, &cons, fat, memtotal);	/* コマンド実行 */
+					cons_runcmd(cmdline, &cons, fat, memtotal, cons.cur_x / 8 - 2);	/* コマンド実行 */
 					if (cons.sht == 0) {
 						cmd_exit(&cons, fat);
 					}
@@ -211,7 +211,7 @@ void cons_putstr1(struct CONSOLE* cons, char* s, int l)
 	return;
 }
 
-void cons_runcmd(char* cmdline, struct CONSOLE* cons, int* fat, int memtotal)
+void cons_runcmd(char* cmdline, struct CONSOLE* cons, int* fat, int memtotal, int end)
 {
 	if (cons->sht != 0) {
 		if (strcmp(cmdline, "mem") == 0) cmd_mem(cons, memtotal);
@@ -221,12 +221,23 @@ void cons_runcmd(char* cmdline, struct CONSOLE* cons, int* fat, int memtotal)
 
 	if (strcmp(cmdline, "exit") == 0) cmd_exit(cons, fat);
 	else if (strncmp(cmdline, "start ", 6) == 0) cmd_start(cons, cmdline, memtotal);
-	else if (strncmp(cmdline, "ncst ", 5) == 0) cmd_ncst(cons, cmdline, memtotal);
+	else if (strncmp(cmdline, "ncst ", 5) == 0) cmd_ncst(cons, cmdline, memtotal, 0);
+	else if (cmdline[strrchr(cmdline, '&')-cmdline]=='&') cmd_ncst(cons, cmdline, memtotal, 1);
 	else if (strncmp(cmdline, "langmode ", 9) == 0) cmd_langmode(cons, cmdline);
+	else if (strncmp(cmdline, "echo ", 5) == 0) { // this is pseudo echo
+		char echo[30];
+		int i;
+		for (i = 0; cmdline[i] != 0; i++) {
+			echo[i]=cmdline[i+5];
+		}
+		cons_putstr0(cons, echo);
+		cons_putstr0(cons, "\n");
+	}
 
 	else if (cmdline[0] != 0) {
 		if (cmd_app(cons, fat, cmdline) == 0) {
 			/* コマンドではなく、アプリでもなく、さらに空行でもない */
+			cons_putstr0(cons, cmdline);
 			cons_putstr0(cons, "Command not found.\n\n");
 		}
 	}
@@ -322,14 +333,22 @@ void cmd_start(struct CONSOLE* cons, char* cmdline, int memtotal)
 	return;
 }
 
-void cmd_ncst(struct CONSOLE* cons, char* cmdline, int memtotal)
+void cmd_ncst(struct CONSOLE* cons, char* cmdline, int memtotal, int mode)
 {
 	struct TASK* task = open_constask(0, memtotal);
 	struct FIFO32* fifo = &task->fifo;
 	int i;
 	/* コマンドラインに入力された文字列を、一文字ずつ新しいコンソールに入力 */
-	for (i = 5; cmdline[i] != 0; i++) {
-		fifo32_put(fifo, cmdline[i] + 256);
+
+	if (mode) {// mode 1 is & (this process isn't considered after '&'. So, can't process e.g.'&a')
+		for (i = 0; i< strrchr(cmdline, '&') - cmdline; i++) {
+			fifo32_put(fifo, cmdline[i] + 256);
+		}
+	}
+	else { //mode 0 is ncst
+		for (i = 5; cmdline[i] != 0; i++) {
+			fifo32_put(fifo, cmdline[i] + 256);
+		}
 	}
 	fifo32_put(fifo, 10 + 256);	/* Enter */
 	cons_newline(cons);
